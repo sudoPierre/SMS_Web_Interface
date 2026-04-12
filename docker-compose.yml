@@ -33,6 +33,18 @@ services:
       db:
         condition: service_healthy
 
+  worker:
+    build: ./worker
+    container_name: sms_worker
+    environment:
+      - DB_HOST=db
+      - DB_USER=sms_user
+      - DB_PASSWORD=Password123
+      - DB_NAME=sms_db
+      - SMS_GATEWAY_IP=192.168.1.63
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   db_data:
