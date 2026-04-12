@@ -2,7 +2,7 @@
 
 `Development in progress ⚠️`
 
-Web interface backend for an Android SMS Gateway workflow.
+Web interface for Android SMS Gateway.
 
 This project receives incoming SMS events from an Android gateway app and stores them in MySQL. It also exposes an API endpoint to queue outbound SMS messages from a ReactJS Web interface.
 
