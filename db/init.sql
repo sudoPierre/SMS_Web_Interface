@@ -1,15 +1,15 @@
-USE `mysql`;
+USE `sms_db`;
 
 DROP TABLE IF EXISTS
     `messages`;
 
-CREATE TABLE messages (
-    id SERIAL PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     phone_number VARCHAR(20) NOT NULL,
     body TEXT NOT NULL,
-    direction VARCHAR(10) CHECK (direction IN ('inbound', 'outbound')),
-    status VARCHAR(20) DEFAULT 'pending', -- pending, sent, delivered, received, failed
-    error_message TEXT,          -- for debugging purposes
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+    direction VARCHAR(10),
+    status VARCHAR(20) DEFAULT 'pending',
+    error_message TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
