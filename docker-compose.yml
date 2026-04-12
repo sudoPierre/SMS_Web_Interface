@@ -28,7 +28,7 @@ services:
       - DB_PASSWORD=Password123
       - DB_NAME=sms_db
     ports:
-      - "5000:5000"
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy

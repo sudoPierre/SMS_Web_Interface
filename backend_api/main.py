@@ -1,13 +1,34 @@
 import pymysql.cursors
 import os
 import cryptography
+from fastapi import FastAPI
+from pydantic import BaseModel
+from typing import Literal
+from datetime import datetime
+
+app = FastAPI()
 
 DB_HOST = os.getenv("DB_HOST")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
 
-def write_sms_in_db(phone_number: str, body: str):
+class SMSRequest(BaseModel):
+    phoneNumber: str
+    message: str
+
+class SMSPayload(BaseModel):
+    messageId: str
+    message: str
+    phoneNumber: str
+    simNumber: int
+    receivedAt: datetime
+
+class SMSReceived(BaseModel):
+    event: str
+    payload: SMSPayload
+
+def write_sms_in_db(phone_number: str, body: str, direction: Literal["inbound", "outbound"]):
     connection = pymysql.connect(host=DB_HOST,
                                 user=DB_USER,
                                 password=DB_PASSWORD,
@@ -16,12 +37,9 @@ def write_sms_in_db(phone_number: str, body: str):
 
     try:
         with connection.cursor() as cursor:
-            # Create a new record
             sql = " INSERT INTO `messages`(`phone_number`, `body`, `direction`, `status`) VALUES(%s, %s, %s, %s)"
-            cursor.execute(sql, (phone_number, body, 'inbound', 'pending'))
+            cursor.execute(sql, (phone_number, body, direction, 'pending'))
 
-        # connection is not autocommit by default. So you must commit to save
-        # your changes.
         connection.commit()
     except Exception as e:
         print (e)
@@ -29,5 +47,12 @@ def write_sms_in_db(phone_number: str, body: str):
     finally:
         connection.close()
 
-if __name__ == "__main__":
-    write_sms_in_db('+33665123456', 'this is a test message for database')
+@app.post("/webhook")
+def received_sms_from_gateway(data: SMSReceived):
+    write_sms_in_db(data.payload.phoneNumber, data.payload.message, "inbound")
+    return {"status": "success", "message": "Webhook received"}
+
+@app.post("/api/messages/send")
+def sent_sms_from_front(payload: SMSRequest):
+    write_sms_in_db(payload.phoneNumber, payload.message, "outbound")
+    return {"message": "SMS ready for processing.", "phone_number": payload.phone_number}
