@@ -4,8 +4,10 @@ services:
     image: mysql:latest
     container_name: sms_database
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: sms_db
+      - MYSQL_USER=sms_user
+      - MYSQL_PASSWORD=Password123
+      - MYSQL_DATABASE=sms_db
+      - MYSQL_ALLOW_EMPTY_PASSWORD=yes
     ports:
       - "3306:3306"
     volumes:
@@ -16,6 +18,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  
+  backend_api:
+    build: ./backend_api
+    container_name: sms_backend_api
+    environment:
+      - DB_HOST=db
+      - DB_USER=sms_user
+      - DB_PASSWORD=Password123
+      - DB_NAME=sms_db
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
 
 volumes:
   db_data:
