@@ -10,14 +10,14 @@ This project receives incoming SMS events from an Android gateway app and stores
 
 - Receive inbound SMS via webhook (`/webhook`)
 - Accept outbound SMS requests from a web UI (`/api/messages/send`)
-- Persist messages in MySQL with direction and status
+- Persist messages in PostgreSQL with direction and status
 - Run everything with Docker Compose
 
 ## Stack
 
 - ReactJS
 - FastAPI (Python)
-- MySQL
+- PostgreSQL
 - Docker + Docker Compose
 
 ## Project Structure
@@ -51,6 +51,7 @@ Important fields:
 - `body`: SMS text
 - `direction`: `inbound` or `outbound`
 - `status`: message processing state (default: `pending`)
+- `retry_count`: number of retry to process
 - `error_message`: optional error details
 - `created_at` / `updated_at`: timestamps
 
@@ -142,9 +143,7 @@ You need an SSL certificate on the webhook url, you can use a reverse proxy as c
 
 ## Development Notes
 
-- Dependencies are defined in `backend_api/requirements.txt`.
 - Database schema initialization is in `db/init.sql`.
-- API source code is in `backend_api/main.py`.
 
 ## License
 
