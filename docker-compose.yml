@@ -6,7 +6,6 @@ services:
     environment:
       - MYSQL_USER=sms_user
       - MYSQL_PASSWORD=Password123
-      - MYSQL_ROOT_PASSWORD=root
       - MYSQL_DATABASE=sms_db
       - MYSQL_ALLOW_EMPTY_PASSWORD=yes
     ports:
