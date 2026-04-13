@@ -1,4 +1,4 @@
-import psycopg2
+import psycopg
 import os
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -30,7 +30,7 @@ class SMSReceived(BaseModel):
     payload: SMSPayload
 
 def write_sms_in_db(phoneNumber: str, body: str, direction: Literal["inbound", "outbound"]):
-    connection = psycopg2.connect(database=DB_NAME,
+    connection = psycopg.connect(dbname=DB_NAME,
                             user=DB_USER,
                             password=DB_PASSWORD,
                             host=DB_HOST,
@@ -61,5 +61,5 @@ def sent_sms_from_front(payload: SMSRequest):
     try:
         write_sms_in_db(payload.phoneNumber, payload.message, "outbound")
     except Exception as e:
-        return {"status": "Failed", "phoneNumber": payload.phoneNumber}
+        return {"status": "Failed", "phoneNumber": payload.phoneNumber, "Error": str(e)}
     return {"status": "SMS ready for processing.", "phoneNumber": payload.phoneNumber}

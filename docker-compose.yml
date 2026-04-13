@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./db:/docker-entrypoint-initdb.d
       - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sms_user -d sms_db -h localhost"]
@@ -44,6 +44,8 @@ services:
       - DB_NAME=sms_db
       - DB_PORT=5432
       - SMS_GATEWAY_IP=192.168.1.63
+      - SMS_GATEWAY_LOGIN=${SMS_GATEWAY_LOGIN:-sms}
+      - SMS_GATEWAY_PASSWORD=${SMS_GATEWAY_PASSWORD:-nVVJ-k9a}
     depends_on:
       db:
         condition: service_healthy

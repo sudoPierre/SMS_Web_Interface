@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-pymysql
 cryptography
 pydantic
-psycopg2-binary
+psycopg[binary]==3.1.18
