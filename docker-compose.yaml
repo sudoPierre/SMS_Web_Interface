@@ -43,7 +43,7 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - DB_NAME=sms_db
       - DB_PORT=5432
-      - SMS_GATEWAY_IP=192.168.1.63
+      - SMS_GATEWAY_IP=${SMS_GATEWAY_IP:-192.168.1.63}
       - SMS_GATEWAY_LOGIN=${SMS_GATEWAY_LOGIN:-sms}
       - SMS_GATEWAY_PASSWORD=${SMS_GATEWAY_PASSWORD:-nVVJ-k9a}
     depends_on:

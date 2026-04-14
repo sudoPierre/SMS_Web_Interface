@@ -18,6 +18,62 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_NAME = os.getenv("DB_NAME")
 DB_PORT = os.getenv("DB_PORT")
 
+db_params = {
+    "dbname":DB_NAME,
+    "user":DB_USER,
+    "password":DB_PASSWORD,
+    "host":DB_HOST,
+    "port":DB_PORT
+}
+
+class DatabaseManager:
+    def __init__(self, db_params):
+        self.params = db_params
+        self.connection = None
+        self.cursor = None
+
+    def open_connection(self):
+        if self.connection is None or self.connection.closed:
+            try:
+                self.connection = psycopg.connect( **self.params, autocommit=True)
+                self.cursor = self.connection.cursor()
+            except Exception as e:
+                if self.connection:
+                    self.connection.rollback()
+                print (f" Error on open_connection class function : {e}")
+    
+    def close_connection(self):
+        if self.connection:
+            self.connection.close()
+
+    def update(self, table, column, value, target_id):
+        try:
+            self.open_connection()
+            with self.connection.cursor() as cursor:
+                sql = f""" UPDATE {table} SET {column} = '{value}' WHERE id = %s """
+                cursor.execute(sql, (target_id,))
+        except Exception as e:
+            print (f" Error on update class function : {e}")
+            self.close_connection()
+        finally:
+            self.close_connection()
+    
+    def select(self, columns, table, target_id):
+        columns_list = ", ".join(columns)
+        sql = f" SELECT {columns_list} from {table} WHERE id = %s "
+        try:
+            self.open_connection()
+            with self.connection.cursor() as cursor:
+                cursor.execute(sql, (target_id,))
+                results = cursor.fetchone()
+        except Exception as e:
+            print (f" Error on select class function : {e}")
+            self.close_connection()
+            return
+        finally:
+            self.close_connection()
+        return results
+
 async def send_sms(phoneNumber, message):
     body = domain.Message(
         phone_numbers=[phoneNumber],
@@ -43,53 +99,27 @@ def processing_sms(messageId: str):
     try:
         asyncio.run(send_sms(phoneNumber, message))
     except Exception as e:
-        print(e)
+        print (f" Error on processing_sms function : {e}")
         return
     else:
         change_message_status_to_sent(messageId)
 
 def get_number_and_body_from_id(messageId: str):
-        conn = psycopg.connect(dbname=DB_NAME,
-                                user=DB_USER,
-                                password=DB_PASSWORD,
-                                host=DB_HOST,
-                                port=DB_PORT)
-
         try:
-            with conn.cursor() as cursor:
-                sql = """ SELECT phone_number, body from messages WHERE id = %s """
-                cursor.execute(sql, (messageId,))
-                user_infos = cursor.fetchone()
-
-            conn.commit()
+            user_infos = db.select(columns=('phone_number', 'body'), table='messages', target_id=messageId )
         except Exception as e:
-            print (e)
-            conn.close()
+            print (f" Error on get_number_and_body_from_id function : {e}")
             return
-        
-        conn.close()
         return user_infos
 
 def change_message_status_to_sent(messageId):
-    conn = psycopg.connect(dbname=DB_NAME,
-                        user=DB_USER,
-                        password=DB_PASSWORD,
-                        host=DB_HOST,
-                        port=DB_PORT)
-
     try:
-        with conn.cursor() as cursor:
-            sql = """ UPDATE messages SET status = 'sent' WHERE id = %s"""
-            cursor.execute(sql, (messageId,))
-
-        conn.commit()
+        db.update(table='messages', column='status', value='sent', target_id=messageId)
     except Exception as e:
-        print (e)
-        conn.close()
-        return
-
-    conn.close()
+        print (f" Error on change_message_status_to_sent function : {e}")
     return 
+
+db = DatabaseManager(db_params)
 
 while True:
     try:
@@ -107,5 +137,5 @@ while True:
                 processing_sms(notification.payload)
                 
     except (psycopg.OperationalError, Exception) as e:
-        print(f"Error : {e}")
+        print(f"Error on listening channel : {e}")
         time.sleep(5)
