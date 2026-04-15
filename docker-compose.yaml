@@ -50,5 +50,18 @@ services:
       db:
         condition: service_healthy
 
+  web_interface:
+    build:
+      context: ./web_interface
+      dockerfile: Dockerfile.dev
+    container_name: sms_web_interface
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web_interface:/app
+      - /app/node_modules
+    environment:
+      - VITE_BACKEND_API_URL=http://localhost:8000
+
 volumes:
   db_data:
