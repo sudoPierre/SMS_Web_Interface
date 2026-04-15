@@ -27,7 +27,7 @@ db_params = {
 }
 
 class DatabaseManager:
-    def __init__(self, db_params):
+    def __init__(self, db_params: dict):
         self.params = db_params
         self.connection = None
         self.cursor = None
@@ -46,7 +46,7 @@ class DatabaseManager:
         if self.connection:
             self.connection.close()
 
-    def update(self, table, column, value, target_id):
+    def update(self, table: str, column: str, value: str, target_id):
         try:
             self.open_connection()
             with self.connection.cursor() as cursor:
@@ -58,7 +58,7 @@ class DatabaseManager:
         finally:
             self.close_connection()
     
-    def select(self, columns, table, target_id):
+    def select(self, columns: tuple, table: str, target_id):
         columns_list = ", ".join(columns)
         sql = f" SELECT {columns_list} from {table} WHERE id = %s "
         try:
@@ -74,7 +74,7 @@ class DatabaseManager:
             self.close_connection()
         return results
 
-async def send_sms(phoneNumber, message):
+async def send_sms(phoneNumber: str, message: str):
     body = domain.Message(
         phone_numbers=[phoneNumber],
         text_message=domain.TextMessage(
@@ -112,7 +112,7 @@ def get_number_and_body_from_id(messageId: str):
             return
         return user_infos
 
-def change_message_status_to_sent(messageId):
+def change_message_status_to_sent(messageId: str):
     try:
         db.update(table='messages', column='status', value='sent', target_id=messageId)
     except Exception as e:

@@ -31,7 +31,7 @@ This project receives incoming SMS events from an Android gateway app and stores
 │   ├── main.py
 │   ├── README.md
 │   └── requirements.txt
-├──  db/
+├── db/
 │   ├── init.sql
 │   └── README.md
 └── worker/
