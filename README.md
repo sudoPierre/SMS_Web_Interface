@@ -35,10 +35,14 @@ This project receives incoming SMS events from an Android gateway app and stores
 │   ├── init.sql
 │   └── README.md
 └── worker/
+│   ├── Dockerfile
+│   ├── main.py
+│   ├── README.md
+│   └── requirements.txt
+└── web_interface/
     ├── Dockerfile
-    ├── main.py
-    ├── README.md
-    └── requirements.txt
+    ├── src/
+    └── README.md
 ```
 
 ## Data Model
