@@ -59,15 +59,12 @@ services:
   web_interface:
     build:
       context: ./web_interface
+      args:
+        VITE_BACKEND_API_URL: ${VITE_BACKEND_API_URL:-https://sms.pierre-qui-roule.fr:8000}
     pull_policy: build
     container_name: sms_web_interface
     ports:
       - "5173:80"
-    volumes:
-      - ./web_interface:/app
-      - /app/node_modules
-    environment:
-      - VITE_BACKEND_API_URL=http://localhost:8000
 
 volumes:
   db_data:
