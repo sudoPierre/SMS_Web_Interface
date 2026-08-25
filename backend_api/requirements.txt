@@ -3,3 +3,4 @@ uvicorn
 cryptography
 pydantic
 psycopg[binary]==3.1.18
+python-jose[cryptography]

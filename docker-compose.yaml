@@ -28,6 +28,9 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - DB_NAME=sms_db
       - DB_PORT=5432
+      - SECRET_KEY=${SECRET_KEY:-change_this_secret_in_production}
+      - ADMIN_IDENTIFIER=${ADMIN_IDENTIFIER:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
     ports:
       - "8000:8000"
     depends_on:
