@@ -2,6 +2,7 @@
 services:
   db:
     image: postgres:16-alpine
+    pull_policy: always
     container_name: sms_database
     restart: unless-stopped
     environment:
@@ -21,6 +22,7 @@ services:
   
   backend_api:
     build: ./backend_api
+    pull_policy: build
     container_name: sms_backend_api
     environment:
       - DB_HOST=db
@@ -39,6 +41,7 @@ services:
 
   worker:
     build: ./worker
+    pull_policy: build
     container_name: sms_worker
     environment:
       - DB_HOST=db
@@ -56,6 +59,7 @@ services:
   web_interface:
     build:
       context: ./web_interface
+    pull_policy: build
     container_name: sms_web_interface
     ports:
       - "5173:80"
