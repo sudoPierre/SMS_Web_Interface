@@ -64,7 +64,7 @@ services:
     pull_policy: build
     container_name: sms_web_interface
     ports:
-      - "5173:80"
+      - "5173:5173"
 
 volumes:
   db_data:
