@@ -16,6 +16,23 @@ services:
       timeout: 5s
       retries: 5
 
+  db_init:
+    image: postgres:16-alpine
+    container_name: sms_db_init
+    restart: "no"
+    environment:
+      - PGPASSWORD=${POSTGRES_PASSWORD:-changeme}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./db:/db
+    command: >
+      sh -c "
+        psql -h db -U sms_user -d sms_db -f /db/init.sql &&
+        psql -h db -U sms_user -d sms_db -f /db/trigger.sql
+      "
+
   backend_api:
     build: ./backend_api
     container_name: sms_backend_api
