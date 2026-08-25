@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
+    allowedHosts: ['sms.pierre-qui-roule.fr'],
     port: 5173,
   },
 })
