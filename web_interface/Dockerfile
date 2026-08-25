@@ -1,9 +1,6 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
 
-ARG VITE_BACKEND_API_URL
-ENV VITE_BACKEND_API_URL=$VITE_BACKEND_API_URL
-
 COPY package*.json ./
 RUN npm install
 COPY . .
