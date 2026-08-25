@@ -1,0 +1,22 @@
+# Local development overrides — loaded automatically by `docker compose up`.
+# Uses the Vite dev server with hot reload via volume mounts.
+services:
+  backend_api:
+    ports:
+      - "8000:8000"
+
+  db:
+    ports:
+      - "5432:5432"
+
+  web_interface:
+    build:
+      context: ./web_interface
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web_interface:/app
+      - /app/node_modules
+    environment:
+      - VITE_BACKEND_API_URL=http://localhost:8000

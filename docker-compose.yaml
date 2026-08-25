@@ -1,4 +1,3 @@
-
 services:
   db:
     image: postgres:16-alpine
@@ -8,8 +7,6 @@ services:
       POSTGRES_USER: sms_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: sms_db
-    ports:
-      - "5432:5432"
     volumes:
       - ./db:/docker-entrypoint-initdb.d
       - db_data:/var/lib/postgresql/data
@@ -18,10 +15,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  
+
   backend_api:
     build: ./backend_api
     container_name: sms_backend_api
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_USER=sms_user
@@ -31,8 +29,6 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change_this_secret_in_production}
       - ADMIN_IDENTIFIER=${ADMIN_IDENTIFIER:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
-    ports:
-      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
@@ -40,15 +36,16 @@ services:
   worker:
     build: ./worker
     container_name: sms_worker
+    restart: unless-stopped
     environment:
       - DB_HOST=db
       - DB_USER=sms_user
       - DB_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - DB_NAME=sms_db
       - DB_PORT=5432
-      - SMS_GATEWAY_IP=${SMS_GATEWAY_IP:-192.168.1.63}
-      - SMS_GATEWAY_LOGIN=${SMS_GATEWAY_LOGIN:-sms}
-      - SMS_GATEWAY_PASSWORD=${SMS_GATEWAY_PASSWORD:-nVVJ-k9a}
+      - SMS_GATEWAY_IP=${SMS_GATEWAY_IP}
+      - SMS_GATEWAY_LOGIN=${SMS_GATEWAY_LOGIN}
+      - SMS_GATEWAY_PASSWORD=${SMS_GATEWAY_PASSWORD}
     depends_on:
       db:
         condition: service_healthy
@@ -56,15 +53,13 @@ services:
   web_interface:
     build:
       context: ./web_interface
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile
     container_name: sms_web_interface
+    restart: unless-stopped
     ports:
-      - "5173:5173"
-    volumes:
-      - ./web_interface:/app
-      - /app/node_modules
-    environment:
-      - VITE_BACKEND_API_URL=http://localhost:8000
+      - "80:80"
+    depends_on:
+      - backend_api
 
 volumes:
   db_data:
