@@ -1,13 +1,17 @@
 import psycopg
 import os
 import secrets
-from fastapi import FastAPI, Depends, HTTPException
+import logging
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Literal
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
@@ -95,11 +99,15 @@ def login(data: LoginRequest):
 # --- Webhook: no auth, called by the SMS gateway ---
 
 @app.post("/webhook")
-def received_sms_from_gateway(data: SMSReceived):
+async def received_sms_from_gateway(request: Request):
+    body = await request.json()
+    logger.info("[webhook] received: %s", body)
     try:
+        data = SMSReceived(**body)
         write_sms_in_db(data.payload.phoneNumber, data.payload.message, "inbound")
-    except Exception:
-        return {"status": "error"}
+    except Exception as e:
+        logger.error("[webhook] failed to process: %s", e)
+        return {"status": "error", "detail": str(e)}
     return {"status": "success", "message": "Webhook received"}
 
 
