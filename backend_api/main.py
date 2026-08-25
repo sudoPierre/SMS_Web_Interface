@@ -14,14 +14,6 @@ from jose import JWTError, jwt
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 DB_HOST = os.getenv("DB_HOST")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
@@ -32,8 +24,12 @@ SECRET_KEY = os.getenv("SECRET_KEY", secrets.token_hex(32))
 ADMIN_IDENTIFIER = os.getenv("ADMIN_IDENTIFIER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
 
-security = HTTPBearer()
 
+def get_db():
+    return psycopg.connect(
+        dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD,
+        host=DB_HOST, port=DB_PORT
+    )
 
 def init_db():
     conn = get_db()
@@ -104,6 +100,18 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+security = HTTPBearer()
+
+
+# --- Models ---
 
 class SMSRequest(BaseModel):
     phoneNumber: str
@@ -125,11 +133,7 @@ class LoginRequest(BaseModel):
     password: str
 
 
-def get_db():
-    return psycopg.connect(
-        dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD,
-        host=DB_HOST, port=DB_PORT
-    )
+# --- Helpers ---
 
 def write_sms_in_db(phoneNumber: str, body: str, direction: Literal["inbound", "outbound"]):
     conn = get_db()
@@ -157,6 +161,8 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) 
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
+
+# --- Auth ---
 
 @app.post("/api/auth/login")
 def login(data: LoginRequest):
