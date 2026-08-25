@@ -58,7 +58,7 @@ services:
       context: ./web_interface
     container_name: sms_web_interface
     ports:
-      - "5173:5173"
+      - "5173:80"
     volumes:
       - ./web_interface:/app
       - /app/node_modules
