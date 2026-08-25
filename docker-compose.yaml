@@ -56,8 +56,8 @@ services:
       dockerfile: Dockerfile
     container_name: sms_web_interface
     restart: unless-stopped
-    expose:
-      - "80"
+    ports:
+      - "3000:80"
     depends_on:
       - backend_api
 
