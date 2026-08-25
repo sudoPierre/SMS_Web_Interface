@@ -2,6 +2,7 @@ import psycopg
 import os
 import secrets
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -12,8 +13,6 @@ from jose import JWTError, jwt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,6 +33,76 @@ ADMIN_IDENTIFIER = os.getenv("ADMIN_IDENTIFIER", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "changeme")
 
 security = HTTPBearer()
+
+
+def init_db():
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS messages (
+                    id SERIAL PRIMARY KEY,
+                    phone_number VARCHAR(20) NOT NULL,
+                    body TEXT NOT NULL,
+                    direction VARCHAR(10) CHECK (direction IN ('inbound', 'outbound')),
+                    status VARCHAR(20) DEFAULT 'pending',
+                    retry_count INTEGER DEFAULT 0,
+                    error_message TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(100),
+                    phone_number VARCHAR(20) UNIQUE NOT NULL,
+                    activated BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE OR REPLACE FUNCTION create_user_if_not_exists()
+                RETURNS trigger AS $$
+                DECLARE exists_in_users BOOLEAN;
+                BEGIN
+                    SELECT EXISTS (SELECT 1 FROM users WHERE phone_number = NEW.phone_number)
+                    INTO exists_in_users;
+                    IF NOT exists_in_users THEN
+                        INSERT INTO users (phone_number) VALUES (NEW.phone_number);
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                DROP TRIGGER IF EXISTS trigger_on_messages_insert ON messages;
+                CREATE TRIGGER trigger_on_messages_insert
+                    AFTER INSERT ON messages FOR EACH ROW
+                    EXECUTE FUNCTION create_user_if_not_exists();
+                CREATE OR REPLACE FUNCTION notify_worker()
+                RETURNS trigger AS $$
+                BEGIN
+                    IF NEW.status = 'pending' AND NEW.direction = 'outbound' THEN
+                        PERFORM pg_notify('worker_channel', NEW.id::text);
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+                DROP TRIGGER IF EXISTS trigger_notify_worker_on_pending_message ON messages;
+                CREATE TRIGGER trigger_notify_worker_on_pending_message
+                    AFTER INSERT ON messages FOR EACH ROW
+                    EXECUTE FUNCTION notify_worker();
+            """)
+        conn.commit()
+        logger.info("Database schema ready")
+    except Exception as e:
+        conn.rollback()
+        logger.error("Failed to initialize schema: %s", e)
+        raise
+    finally:
+        conn.close()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 
 class SMSRequest(BaseModel):
