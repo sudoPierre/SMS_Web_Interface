@@ -4,7 +4,9 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-RUN npm run build
+# Always call the API on the same origin (nginx proxies /api and /webhook),
+# even if the platform injects VITE_BACKEND_API_URL as a build arg
+RUN VITE_BACKEND_API_URL= npm run build
 
 FROM nginx:1.27-alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
