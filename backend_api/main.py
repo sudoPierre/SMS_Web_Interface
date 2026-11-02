@@ -1,15 +1,18 @@
+import asyncio
 import psycopg
 import os
 import secrets
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Literal
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
+
+import commands
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,6 +57,12 @@ def init_db():
                     activated BOOLEAN DEFAULT FALSE,
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
+                CREATE TABLE IF NOT EXISTS authorized_numbers (
+                    phone_number VARCHAR(20) PRIMARY KEY,
+                    label VARCHAR(100),
+                    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
                 CREATE OR REPLACE FUNCTION create_user_if_not_exists()
                 RETURNS trigger AS $$
                 DECLARE exists_in_users BOOLEAN;
@@ -96,6 +105,7 @@ def init_db():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    commands.load_commands()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -173,8 +183,17 @@ def login(data: LoginRequest):
 
 # --- Webhook: no auth, called by the SMS gateway ---
 
+async def handle_sms_command(sender: str, text: str):
+    if not await asyncio.to_thread(commands.is_authorized, sender, get_db):
+        logger.warning("[commands] ignored command from unauthorized number %s", sender)
+        return
+    await commands.dispatch(
+        sender, text,
+        reply=lambda message: write_sms_in_db(sender, message, "outbound"),
+    )
+
 @app.post("/webhook")
-async def received_sms_from_gateway(request: Request):
+async def received_sms_from_gateway(request: Request, background_tasks: BackgroundTasks):
     body = await request.json()
     logger.info("[webhook] received: %s", body)
     try:
@@ -183,6 +202,9 @@ async def received_sms_from_gateway(request: Request):
     except Exception as e:
         logger.error("[webhook] failed to process: %s", e)
         return {"status": "error", "detail": str(e)}
+    # Commands run after the response is sent, so the gateway never waits on external APIs
+    if data.event == "sms:received" and commands.is_command(data.payload.message):
+        background_tasks.add_task(handle_sms_command, data.payload.phoneNumber, data.payload.message)
     return {"status": "success", "message": "Webhook received"}
 
 
