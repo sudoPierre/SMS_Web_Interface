@@ -2,7 +2,8 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+# npm ci installs the locked tree without resolving it, which keeps memory low on small build hosts
+RUN npm ci --no-audit --no-fund
 COPY . .
 # Always call the API on the same origin (nginx proxies /api and /webhook),
 # even if the platform injects VITE_BACKEND_API_URL as a build arg
