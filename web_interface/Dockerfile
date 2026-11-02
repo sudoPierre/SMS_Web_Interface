@@ -3,7 +3,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 COPY . .
-ARG VITE_BACKEND_API_URL
+# Leave empty to call the API on the same origin (proxied by nginx)
+ARG VITE_BACKEND_API_URL=
 RUN npm run build
 
 FROM nginx:alpine
