@@ -34,6 +34,11 @@ services:
       - SMS_DEFAULT_COUNTRY_CODE=${SMS_DEFAULT_COUNTRY_CODE:-33}
       - HA_URL=${HA_URL:-}
       - HA_TOKEN=${HA_TOKEN:-}
+      # AI agent: enabled when ANTHROPIC_API_KEY is set; answers only numbers in the authorized_numbers table
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AGENT_MODEL=${AGENT_MODEL:-claude-opus-5-5}
+      - AGENT_EFFORT=${AGENT_EFFORT:-low}
+      - AGENT_HA_DOMAINS=${AGENT_HA_DOMAINS:-light,switch,fan,scene,script,input_boolean}
     depends_on:
       db:
         condition: service_healthy

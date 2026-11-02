@@ -25,12 +25,15 @@ def env_numbers() -> set:
     return {normalize_number(n) for n in raw.split(",") if n.strip()}
 
 
-def is_authorized(number: str, get_db) -> bool:
-    """True if the number is in AUTHORIZED_NUMBERS (comma-separated) or the authorized_numbers table."""
+def is_authorized(number: str, get_db, include_env: bool = True) -> bool:
+    """True if the number is enabled in the authorized_numbers table, or in AUTHORIZED_NUMBERS.
+
+    include_env=False restricts the check to the database whitelist (used by the AI agent).
+    """
     n = normalize_number(number)
     if not n:
         return False
-    if n in env_numbers():
+    if include_env and n in env_numbers():
         return True
     conn = get_db()
     try:

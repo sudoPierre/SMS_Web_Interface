@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api.js'
+import { SenderBadge } from './MessageThread.jsx'
 
 function avatarInitials(phone) {
   const digits = phone.replace(/\D/g, '')
@@ -186,7 +187,10 @@ export default function Sidebar({ selectedPhone, onSelect, refreshKey, onLogout,
                   </span>
                 </div>
                 <div className="flex items-center gap-1 mt-0.5">
-                  {conv.direction === 'outbound' && (
+                  {conv.direction === 'outbound' && conv.sender_type === 'ai_agent' && (
+                    <SenderBadge type="ai_agent" className="flex-shrink-0" />
+                  )}
+                  {conv.direction === 'outbound' && conv.sender_type !== 'ai_agent' && (
                     <svg className="w-3 h-3 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>

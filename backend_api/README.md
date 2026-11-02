@@ -60,3 +60,50 @@ This is already done in `main.py`:
 1. `commands.load_commands()` runs in the `lifespan` hook.
 2. `/webhook` takes `background_tasks: BackgroundTasks`. After storing the SMS, it calls `background_tasks.add_task(handle_sms_command, sender, text)` when `event == "sms:received"` and `commands.is_command(text)`.
 3. `handle_sms_command` checks `commands.is_authorized(sender, get_db)`, then calls `commands.dispatch(sender, text, reply=...)`.
+
+## AI agent
+
+An incoming SMS that does **not** start with `/` goes to an LLM agent (Claude, through the Anthropic API) that can act on the house with tools, e.g. "Allume le salon".
+
+```text
+/webhook ──► store inbound SMS ──► 200 OK
+                 │
+                 └─► background task: authorized_numbers check (DB only) ──► agent loop
+                                                                               │
+          ┌────────────────────────────────────────────────────────────────────┘
+          ▼
+   Claude ──tool_use──► run tools (asyncio.gather) ──tool_result──► Claude ... ──► final text
+                                                                                       │
+          reply SMS (messages.sender_type = 'ai_agent') ◄── worker sends it ◄──────────┘
+```
+
+- **Enabled** only when `ANTHROPIC_API_KEY` is set. When it is unset, plain SMS are just stored, as before.
+- **Strict whitelist**: the agent only answers numbers that are enabled in the `authorized_numbers` table (the web UI whitelist). Numbers that come only from `AUTHORIZED_NUMBERS` can run `/commands` but cannot talk to the agent. Any other SMS is ignored before the API is called.
+- **Loop** (`agent/loop.py`): the SMS is sent to the model with the registered tools. Each `tool_use` block is validated and run, all calls of a turn concurrently, and the results go back as `tool_result` blocks (`is_error` on failure). The loop ends on the model's final text, or after `AGENT_MAX_TURNS` turns (default 8). Refusals, truncated output and API errors produce a short apology SMS instead.
+- **Model**: `AGENT_MODEL` (default `claude-opus-5-5`) at `AGENT_EFFORT` (default `low`, enough for short home-automation requests). Requests use server-side refusal fallbacks (`fallbacks: "default"`).
+- **Traceability**: `messages.sender_type` is `human` (inbound SMS and web UI), `command` (`/command` replies) or `ai_agent`. The web UI shows an "AI agent" badge on agent replies.
+- **Home Assistant tools** (`agent/tools/home_assistant.py`): `ha_list_entities` (to map "le salon" to `light.salon`) and `ha_call_service` (`turn_on` / `turn_off` / `toggle`). They are restricted to the domains in `AGENT_HA_DOMAINS` (default `light,switch,fan,scene,script,input_boolean`). Locks, alarms and covers stay out unless you add them.
+
+Each SMS is answered on its own: the agent does not see earlier messages of the conversation.
+
+### Adding a tool
+
+Create a file in `agent/tools/`. The JSON schema sent to the model is derived from the signature, and inputs are validated against it before the function runs:
+
+```python
+# agent/tools/weather.py
+from typing import Annotated
+from pydantic import Field
+from ..registry import ToolError, agent_tool
+
+@agent_tool("Current outdoor temperature in °C measured by the house sensor.")
+async def outdoor_temperature(
+    sensor: Annotated[str, Field(description="Sensor entity id, e.g. sensor.jardin")] = "sensor.jardin",
+):
+    ...                         # raise ToolError("...") to report a failure to the model
+    return {"temperature": 12.5}  # str, or anything JSON-serializable
+```
+
+### Migrations
+
+`migrations/*.sql` files run once each, in name order, when the backend starts. Applied versions are recorded in `schema_migrations`. `001_messages_sender_type.sql` adds `messages.sender_type`.

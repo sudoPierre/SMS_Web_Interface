@@ -1,7 +1,6 @@
-import os
 import re
 
-import httpx
+from integrations import home_assistant as ha
 
 from ..registry import CommandError, sms_command
 
@@ -21,10 +20,6 @@ USAGE = "/ha <domaine> <entité|all> [on|off|toggle]"
     usage=USAGE,
 )
 async def home_assistant(ctx):
-    url = os.getenv("HA_URL", "").rstrip("/")
-    token = os.getenv("HA_TOKEN", "")
-    if not url or not token:
-        raise CommandError("Home Assistant n'est pas configuré (HA_URL / HA_TOKEN)")
     if len(ctx.args) < 2:
         raise CommandError(f"usage : {USAGE}")
 
@@ -37,17 +32,9 @@ async def home_assistant(ctx):
         raise CommandError(f"action inconnue '{action}' (on, off, toggle)")
 
     entity_id = "all" if target == "all" else (target if "." in target else f"{domain}.{target}")
-
     try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.post(
-                f"{url}/api/services/{domain}/{service}",
-                headers={"Authorization": f"Bearer {token}"},
-                json={"entity_id": entity_id},
-            )
-    except httpx.HTTPError as e:
-        raise CommandError(f"Home Assistant injoignable ({type(e).__name__})")
-    if response.status_code >= 400:
-        raise CommandError(f"Home Assistant a répondu {response.status_code}")
+        await ha.call_service(domain, service, entity_id)
+    except ha.HomeAssistantError as e:
+        raise CommandError(str(e))
 
     return f"OK : {domain}.{service} -> {entity_id}"

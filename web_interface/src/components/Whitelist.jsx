@@ -74,7 +74,8 @@ export default function Whitelist({ onClose }) {
         <div>
           <h2 className="font-semibold text-slate-800">Command whitelist</h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            Only these numbers can run SMS commands such as <code className="text-indigo-600">/help</code>
+            Only these numbers can run SMS commands such as <code className="text-indigo-600">/help</code> or
+            talk to the AI agent
           </p>
         </div>
         <button
@@ -136,7 +137,9 @@ export default function Whitelist({ onClose }) {
                     {n.phone_number}
                   </p>
                   {n.source === 'env' ? (
-                    <p className="text-xs text-slate-400">Set by AUTHORIZED_NUMBERS (edit it in the deployment config)</p>
+                    <p className="text-xs text-slate-400">
+                      Set by AUTHORIZED_NUMBERS: commands only, no AI agent (edit it in the deployment config)
+                    </p>
                   ) : (
                     <input
                       type="text"

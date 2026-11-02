@@ -42,6 +42,40 @@ function StatusIcon({ status }) {
   return null
 }
 
+// Outbound messages not typed by a person: replies from the AI agent or the /command engine
+const SENDER_BADGES = {
+  ai_agent: {
+    label: 'AI agent',
+    className: 'bg-violet-100 text-violet-700',
+    icon: 'M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z',
+  },
+  command: {
+    label: 'Command',
+    className: 'bg-slate-100 text-slate-600',
+    icon: 'M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+  },
+}
+
+export function SenderBadge({ type, className = '' }) {
+  const badge = SENDER_BADGES[type]
+  if (!badge) return null
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide ${badge.className} ${className}`}
+    >
+      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={badge.icon} />
+      </svg>
+      {badge.label}
+    </span>
+  )
+}
+
+const outboundBubble = {
+  ai_agent: 'bg-violet-600 text-white rounded-tr-sm',
+  command: 'bg-slate-700 text-white rounded-tr-sm',
+}
+
 export default function MessageThread({ phone, refreshKey }) {
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(true)
@@ -111,12 +145,13 @@ export default function MessageThread({ phone, refreshKey }) {
           messages.map((msg) => (
             <div
               key={msg.id}
-              className={`flex ${msg.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
+              className={`flex flex-col ${msg.direction === 'outbound' ? 'items-end' : 'items-start'}`}
             >
+              {msg.direction === 'outbound' && <SenderBadge type={msg.sender_type} className="mb-1" />}
               <div
                 className={`max-w-xs lg:max-w-md px-4 py-2.5 rounded-2xl text-sm shadow-sm ${
                   msg.direction === 'outbound'
-                    ? 'bg-indigo-600 text-white rounded-tr-sm'
+                    ? outboundBubble[msg.sender_type] || 'bg-indigo-600 text-white rounded-tr-sm'
                     : 'bg-white text-slate-800 rounded-tl-sm border border-slate-100'
                 }`}
               >
@@ -128,7 +163,7 @@ export default function MessageThread({ phone, refreshKey }) {
                 >
                   <span
                     className={`text-xs ${
-                      msg.direction === 'outbound' ? 'text-indigo-200' : 'text-slate-400'
+                      msg.direction === 'outbound' ? 'text-white/70' : 'text-slate-400'
                     }`}
                   >
                     {formatDateTime(msg.created_at)}

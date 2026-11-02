@@ -5,6 +5,7 @@ import re
 import secrets
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -13,6 +14,7 @@ from typing import Literal, Optional
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 
+import agent
 import commands
 
 logging.basicConfig(level=logging.INFO)
@@ -95,6 +97,7 @@ def init_db():
                     EXECUTE FUNCTION notify_worker();
             """)
         conn.commit()
+        apply_migrations(conn)
         logger.info("Database schema ready")
     except Exception as e:
         conn.rollback()
@@ -103,10 +106,34 @@ def init_db():
     finally:
         conn.close()
 
+MIGRATIONS_DIR = Path(__file__).parent / "migrations"
+
+def apply_migrations(conn):
+    """Run each migrations/*.sql file once, in name order, each in its own transaction."""
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version VARCHAR(255) PRIMARY KEY,
+                applied_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor.execute("SELECT version FROM schema_migrations")
+        applied = {r[0] for r in cursor.fetchall()}
+    conn.commit()
+    for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if path.name in applied:
+            continue
+        with conn.cursor() as cursor:
+            cursor.execute(path.read_text())
+            cursor.execute("INSERT INTO schema_migrations (version) VALUES (%s)", (path.name,))
+        conn.commit()
+        logger.info("Applied migration %s", path.name)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     commands.load_commands()
+    agent.load_tools()
     yield
 
 app = FastAPI(lifespan=lifespan)
@@ -154,13 +181,20 @@ class LoginRequest(BaseModel):
 
 # --- Helpers ---
 
-def write_sms_in_db(phoneNumber: str, body: str, direction: Literal["inbound", "outbound"]):
+SenderType = Literal["human", "command", "ai_agent"]
+
+def write_sms_in_db(
+    phoneNumber: str,
+    body: str,
+    direction: Literal["inbound", "outbound"],
+    sender_type: SenderType = "human",
+):
     conn = get_db()
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "INSERT INTO messages(phone_number, body, direction, status) VALUES(%s, %s, %s, %s)",
-                (phoneNumber, body, direction, "pending"),
+                "INSERT INTO messages(phone_number, body, direction, status, sender_type) VALUES(%s, %s, %s, %s, %s)",
+                (phoneNumber, body, direction, "pending", sender_type),
             )
         conn.commit()
     except Exception as e:
@@ -192,14 +226,33 @@ def login(data: LoginRequest):
 
 # --- Webhook: no auth, called by the SMS gateway ---
 
-async def handle_sms_command(sender: str, text: str):
-    if not await asyncio.to_thread(commands.is_authorized, sender, get_db):
-        logger.warning("[commands] ignored command from unauthorized number %s", sender)
+def should_handle(text: str) -> bool:
+    """Whether an incoming SMS goes to the command engine or the AI agent."""
+    return commands.is_command(text) or agent.is_enabled()
+
+async def handle_incoming_sms(sender: str, text: str):
+    """Route an SMS from the gateway: "/..." to the command engine, anything else to the AI agent.
+
+    Both paths check the whitelist before doing anything. The agent only answers numbers
+    from the authorized_numbers table (not AUTHORIZED_NUMBERS), so it can be granted per number.
+    """
+    if commands.is_command(text):
+        if not await asyncio.to_thread(commands.is_authorized, sender, get_db):
+            logger.warning("[commands] ignored command from unauthorized number %s", sender)
+            return
+        await commands.dispatch(
+            sender, text,
+            reply=lambda message: write_sms_in_db(sender, message, "outbound", "command"),
+        )
         return
-    await commands.dispatch(
-        sender, text,
-        reply=lambda message: write_sms_in_db(sender, message, "outbound"),
-    )
+
+    if not agent.is_enabled():
+        return
+    if not await asyncio.to_thread(commands.is_authorized, sender, get_db, False):
+        logger.info("[agent] ignored SMS from number outside the whitelist %s", sender)
+        return
+    reply = await agent.run_agent(sender, text)
+    await asyncio.to_thread(write_sms_in_db, sender, reply, "outbound", "ai_agent")
 
 @app.post("/webhook")
 async def received_sms_from_gateway(request: Request, background_tasks: BackgroundTasks):
@@ -211,9 +264,9 @@ async def received_sms_from_gateway(request: Request, background_tasks: Backgrou
     except Exception as e:
         logger.error("[webhook] failed to process: %s", e)
         return {"status": "error", "detail": str(e)}
-    # Commands run after the response is sent, so the gateway never waits on external APIs
-    if data.event == "sms:received" and commands.is_command(data.payload.message):
-        background_tasks.add_task(handle_sms_command, data.payload.phoneNumber, data.payload.message)
+    # Commands and the agent run after the response is sent, so the gateway never waits on external APIs
+    if data.event == "sms:received" and should_handle(data.payload.message):
+        background_tasks.add_task(handle_incoming_sms, data.payload.phoneNumber, data.payload.message)
     return {"status": "success", "message": "Webhook received"}
 
 
@@ -237,7 +290,7 @@ def get_conversations(_: str = Depends(verify_token)):
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT DISTINCT ON (phone_number)
-                    phone_number, body, direction, status, created_at
+                    phone_number, body, direction, status, created_at, sender_type
                 FROM messages
                 ORDER BY phone_number, created_at DESC
             """)
@@ -251,6 +304,7 @@ def get_conversations(_: str = Depends(verify_token)):
             "direction": r[2],
             "status": r[3],
             "created_at": r[4].isoformat() if r[4] else None,
+            "sender_type": r[5],
         }
         for r in rows
     ]
@@ -261,7 +315,7 @@ def get_conversation_messages(phone_number: str, _: str = Depends(verify_token))
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT id, body, direction, status, created_at
+                SELECT id, body, direction, status, created_at, sender_type
                 FROM messages
                 WHERE phone_number = %s
                 ORDER BY created_at ASC
@@ -276,6 +330,7 @@ def get_conversation_messages(phone_number: str, _: str = Depends(verify_token))
             "direction": r[2],
             "status": r[3],
             "created_at": r[4].isoformat() if r[4] else None,
+            "sender_type": r[5],
         }
         for r in rows
     ]
