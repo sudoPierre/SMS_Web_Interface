@@ -10,7 +10,7 @@ import time
 
 SMS_GATEWAY_LOGIN = os.getenv('SMS_GATEWAY_LOGIN')
 SMS_GATEWAY_PASSWORD = os.getenv('SMS_GATEWAY_PASSWORD')
-SMS_GATEWAY_URL = f"http://{os.getenv('SMS_GATEWAY_IP')}:8080"
+SMS_GATEWAY_URL = os.getenv('SMS_GATEWAY_URL') or f"http://{os.getenv('SMS_GATEWAY_IP')}:8080"
 
 DB_HOST = os.getenv("DB_HOST")
 DB_USER = os.getenv("DB_USER")
@@ -120,6 +120,8 @@ def change_message_status_to_sent(messageId: str):
     return 
 
 db = DatabaseManager(db_params)
+
+print(f"Using SMS gateway at {SMS_GATEWAY_URL}")
 
 while True:
     try:

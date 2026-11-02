@@ -43,7 +43,9 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - DB_NAME=sms_db
       - DB_PORT=5432
-      - SMS_GATEWAY_IP=${SMS_GATEWAY_IP}
+      # Full gateway API URL. Local mode: http://<phone-ip>:8080 — Cloud mode: https://api.sms-gate.app/3rdparty/v1
+      - SMS_GATEWAY_URL=${SMS_GATEWAY_URL:-}
+      - SMS_GATEWAY_IP=${SMS_GATEWAY_IP:-}
       - SMS_GATEWAY_LOGIN=${SMS_GATEWAY_LOGIN}
       - SMS_GATEWAY_PASSWORD=${SMS_GATEWAY_PASSWORD}
     depends_on:
