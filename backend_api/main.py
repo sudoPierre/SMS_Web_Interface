@@ -173,6 +173,7 @@ class AuthorizedNumberCreate(BaseModel):
 class AuthorizedNumberUpdate(BaseModel):
     label: Optional[str] = None
     enabled: Optional[bool] = None
+    agent_enabled: Optional[bool] = None
 
 class LoginRequest(BaseModel):
     identifier: str
@@ -248,8 +249,8 @@ async def handle_incoming_sms(sender: str, text: str):
 
     if not agent.is_enabled():
         return
-    if not await asyncio.to_thread(commands.is_authorized, sender, get_db, False):
-        logger.info("[agent] ignored SMS from number outside the whitelist %s", sender)
+    if not await asyncio.to_thread(commands.is_authorized, sender, get_db, False, True):
+        logger.info("[agent] ignored SMS from %s: not whitelisted or AI agent disabled", sender)
         return
     reply = await agent.run_agent(sender, text)
     await asyncio.to_thread(write_sms_in_db, sender, reply, "outbound", "ai_agent")
@@ -344,6 +345,7 @@ def authorized_number_row(r):
         "label": r[1],
         "enabled": r[2],
         "created_at": r[3].isoformat() if r[3] else None,
+        "agent_enabled": r[4],
         "source": "db",
     }
 
@@ -359,7 +361,7 @@ def list_authorized_numbers(_: str = Depends(verify_token)):
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT phone_number, label, enabled, created_at
+                SELECT phone_number, label, enabled, created_at, agent_enabled
                 FROM authorized_numbers
                 ORDER BY created_at ASC
             """)
@@ -370,7 +372,7 @@ def list_authorized_numbers(_: str = Depends(verify_token)):
     known = {n["phone_number"] for n in db_numbers}
     # Numbers from AUTHORIZED_NUMBERS are listed read-only: they can only be changed in the deployment config
     env_numbers = [
-        {"phone_number": n, "label": None, "enabled": True, "created_at": None, "source": "env"}
+        {"phone_number": n, "label": None, "enabled": True, "created_at": None, "agent_enabled": False, "source": "env"}
         for n in sorted(commands.env_numbers()) if n not in known
     ]
     return env_numbers + db_numbers
@@ -386,7 +388,7 @@ def add_authorized_number(payload: AuthorizedNumberCreate, _: str = Depends(veri
                 INSERT INTO authorized_numbers (phone_number, label)
                 VALUES (%s, %s)
                 ON CONFLICT (phone_number) DO NOTHING
-                RETURNING phone_number, label, enabled, created_at
+                RETURNING phone_number, label, enabled, created_at, agent_enabled
             """, (number, label))
             row = cursor.fetchone()
         conn.commit()
@@ -401,8 +403,9 @@ def update_authorized_number(phone_number: str, payload: AuthorizedNumberUpdate,
     fields = payload.model_dump(exclude_unset=True)
     if "label" in fields:
         fields["label"] = (fields["label"] or "").strip() or None
-    if "enabled" in fields and fields["enabled"] is None:
-        del fields["enabled"]
+    for flag in ("enabled", "agent_enabled"):
+        if flag in fields and fields[flag] is None:
+            del fields[flag]
     if not fields:
         raise HTTPException(status_code=422, detail="Nothing to update")
     assignments = ", ".join(f"{column} = %s" for column in fields)
@@ -413,7 +416,7 @@ def update_authorized_number(phone_number: str, payload: AuthorizedNumberUpdate,
                 f"""
                 UPDATE authorized_numbers SET {assignments}
                 WHERE phone_number = %s
-                RETURNING phone_number, label, enabled, created_at
+                RETURNING phone_number, label, enabled, created_at, agent_enabled
                 """,
                 (*fields.values(), commands.normalize_number(phone_number)),
             )

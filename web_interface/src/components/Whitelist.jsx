@@ -1,6 +1,28 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api.js'
 
+function Toggle({ checked, onChange, disabled, label, title }) {
+  return (
+    <label className={`flex flex-col items-center gap-1 ${disabled ? 'opacity-40' : 'cursor-pointer'}`} title={title}>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={onChange}
+        disabled={disabled}
+        className={`relative w-10 h-6 rounded-full transition ${checked ? 'bg-indigo-600' : 'bg-slate-300'}`}
+      >
+        <span
+          className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+            checked ? 'translate-x-4' : ''
+          }`}
+        />
+      </button>
+      <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">{label}</span>
+    </label>
+  )
+}
+
 export default function Whitelist({ onClose }) {
   const [numbers, setNumbers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -55,6 +77,10 @@ export default function Whitelist({ onClose }) {
 
   function handleToggle(n) {
     run(n.phone_number, () => api.updateAuthorizedNumber(n.phone_number, { enabled: !n.enabled }))
+  }
+
+  function handleAgentToggle(n) {
+    run(n.phone_number, () => api.updateAuthorizedNumber(n.phone_number, { agent_enabled: !n.agent_enabled }))
   }
 
   function handleLabel(n, value) {
@@ -156,18 +182,26 @@ export default function Whitelist({ onClose }) {
                   <span className="text-xs font-medium text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">env</span>
                 ) : (
                   <>
-                    <button
-                      onClick={() => handleToggle(n)}
+                    <Toggle
+                      label="AI agent"
+                      checked={n.enabled && n.agent_enabled}
+                      onChange={() => handleAgentToggle(n)}
+                      disabled={busy === n.phone_number || !n.enabled}
+                      title={
+                        !n.enabled
+                          ? 'Enable the number first'
+                          : n.agent_enabled
+                            ? 'Stop answering this number with the AI agent (commands keep working)'
+                            : 'Let the AI agent answer this number'
+                      }
+                    />
+                    <Toggle
+                      label="Access"
+                      checked={n.enabled}
+                      onChange={() => handleToggle(n)}
                       disabled={busy === n.phone_number}
-                      title={n.enabled ? 'Disable' : 'Enable'}
-                      className={`relative w-10 h-6 rounded-full transition ${n.enabled ? 'bg-indigo-600' : 'bg-slate-300'}`}
-                    >
-                      <span
-                        className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
-                          n.enabled ? 'translate-x-4' : ''
-                        }`}
-                      />
-                    </button>
+                      title={n.enabled ? 'Disable this number (commands and AI agent)' : 'Enable this number'}
+                    />
                     <button
                       onClick={() => handleDelete(n)}
                       disabled={busy === n.phone_number}

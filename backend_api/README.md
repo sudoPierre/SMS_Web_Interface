@@ -24,7 +24,7 @@ Whitelist API (JWT required):
 |---|---|---|
 | `GET` | `/api/authorized-numbers` | lists DB entries plus read-only `AUTHORIZED_NUMBERS` entries (`source: "env"`) |
 | `POST` | `/api/authorized-numbers` | `{"phone_number": "+33612345678", "label": "Pierre"}` |
-| `PATCH` | `/api/authorized-numbers/{number}` | `{"label": "…"}` and/or `{"enabled": false}` |
+| `PATCH` | `/api/authorized-numbers/{number}` | any of `{"label": "…", "enabled": false, "agent_enabled": false}` |
 | `DELETE` | `/api/authorized-numbers/{number}` | |
 
 URL-encode the number in the path (`%2B33612345678`).
@@ -78,7 +78,7 @@ An incoming SMS that does **not** start with `/` goes to an LLM agent (Claude, t
 ```
 
 - **Enabled** only when `ANTHROPIC_API_KEY` is set. When it is unset, plain SMS are just stored, as before.
-- **Strict whitelist**: the agent only answers numbers that are enabled in the `authorized_numbers` table (the web UI whitelist). Numbers that come only from `AUTHORIZED_NUMBERS` can run `/commands` but cannot talk to the agent. Any other SMS is ignored before the API is called.
+- **Strict whitelist**: the agent only answers numbers that are enabled in the `authorized_numbers` table (the web UI whitelist) **and** have `agent_enabled = true`. The "AI agent" switch in the whitelist screen turns the agent off for one number while its `/commands` keep working. Numbers that come only from `AUTHORIZED_NUMBERS` can run `/commands` but cannot talk to the agent. Any other SMS is ignored before the API is called.
 - **Loop** (`agent/loop.py`): the SMS is sent to the model with the registered tools. Each `tool_use` block is validated and run, all calls of a turn concurrently, and the results go back as `tool_result` blocks (`is_error` on failure). The loop ends on the model's final text, or after `AGENT_MAX_TURNS` turns (default 8). Refusals, truncated output and API errors produce a short apology SMS instead.
 - **Model**: `AGENT_MODEL` (default `claude-opus-5-5`) at `AGENT_EFFORT` (default `low`, enough for short home-automation requests). Requests use server-side refusal fallbacks (`fallbacks: "default"`).
 - **Traceability**: `messages.sender_type` is `human` (inbound SMS and web UI), `command` (`/command` replies) or `ai_agent`. The web UI shows an "AI agent" badge on agent replies.
@@ -106,4 +106,4 @@ async def outdoor_temperature(
 
 ### Migrations
 
-`migrations/*.sql` files run once each, in name order, when the backend starts. Applied versions are recorded in `schema_migrations`. `001_messages_sender_type.sql` adds `messages.sender_type`.
+`migrations/*.sql` files run once each, in name order, when the backend starts. Applied versions are recorded in `schema_migrations`. `001_messages_sender_type.sql` adds `messages.sender_type`; `002_authorized_numbers_agent_enabled.sql` adds the per-number agent switch.
