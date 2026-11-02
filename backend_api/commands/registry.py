@@ -5,7 +5,7 @@ import os
 import pkgutil
 import shlex
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,8 @@ class CommandContext:
     name: str
     args: list
     raw: str
+    # Opens a database connection, for handlers that read or change the whitelist
+    get_db: Optional[Callable[[], Any]] = None
 
 
 Handler = Callable[[CommandContext], Awaitable[Optional[str]]]
@@ -81,7 +83,7 @@ def parse(text: str):
     return parts[0].lower(), parts[1:]
 
 
-async def dispatch(sender: str, text: str, reply: Callable[[str], None]):
+async def dispatch(sender: str, text: str, reply: Callable[[str], None], get_db=None):
     """Run the command in `text` and send its result (or error) through `reply`.
 
     `reply` is synchronous (DB write), so it runs in a thread to keep the event loop free.
@@ -99,7 +101,7 @@ async def dispatch(sender: str, text: str, reply: Callable[[str], None]):
         await send(f"Commande inconnue : /{name}. Envoyez /help pour la liste des commandes.")
         return
 
-    ctx = CommandContext(sender=sender, name=name, args=args, raw=text)
+    ctx = CommandContext(sender=sender, name=name, args=args, raw=text, get_db=get_db)
     logger.info("[commands] %s from %s args=%s", name, sender, args)
     try:
         result = await asyncio.wait_for(command.handler(ctx), timeout=COMMAND_TIMEOUT)

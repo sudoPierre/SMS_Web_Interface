@@ -18,13 +18,15 @@ An incoming SMS starting with `/` from an authorized number runs a command, e.g.
 - **Non-blocking**: the webhook only schedules the command (`BackgroundTasks`) and answers the gateway immediately. Handlers are async and time out after `SMS_COMMAND_TIMEOUT` seconds (default 20).
 - **Feedback**: the handler's return value, or the message of a `CommandError`, is sent back to the sender through `write_sms_in_db(..., "outbound")`, the same path as the web UI. Replies therefore show up in the conversation.
 
+**Admins** can manage the whitelist by SMS with `/user`. Numbers in `AUTHORIZED_NUMBERS` are admins; a number from the table becomes admin only through the "Admin" switch of the web UI (`is_admin`).
+
 Whitelist API (JWT required):
 
 | Method | Path | Body |
 |---|---|---|
 | `GET` | `/api/authorized-numbers` | lists DB entries plus read-only `AUTHORIZED_NUMBERS` entries (`source: "env"`) |
 | `POST` | `/api/authorized-numbers` | `{"phone_number": "+33612345678", "label": "Pierre"}` |
-| `PATCH` | `/api/authorized-numbers/{number}` | any of `{"label": "…", "enabled": false, "agent_enabled": false}` |
+| `PATCH` | `/api/authorized-numbers/{number}` | any of `{"label": "…", "enabled": false, "agent_enabled": false, "is_admin": true}` |
 | `DELETE` | `/api/authorized-numbers/{number}` | |
 
 URL-encode the number in the path (`%2B33612345678`).
@@ -34,6 +36,8 @@ URL-encode the number in the path (`%2B33612345678`).
 | Command | Description |
 |---|---|
 | `/help [commande]` | Lists every command with its usage, or details one command |
+| `/user add <numéro> <access\|agent> [nom]` | **Admins only.** Adds a number to the whitelist, or re-enables it and sets its rights: `access` = `/commands`, `agent` = `/commands` + AI agent. The number may contain spaces; an existing label is kept unless a new one is given. Never grants admin. |
+| `/user list` | **Admins only.** Lists the whitelist with each number's rights |
 | `/ha <domaine> <entité\|all> [on\|off\|toggle]` | Calls the Home Assistant service `<domaine>.turn_on/turn_off/toggle` (default `toggle`). `light salon` becomes `light.salon`, and `all` targets every entity of the domain. Needs `HA_URL` and `HA_TOKEN` (a long-lived access token). |
 
 ### Adding a command
@@ -106,4 +110,4 @@ async def outdoor_temperature(
 
 ### Migrations
 
-`migrations/*.sql` files run once each, in name order, when the backend starts. Applied versions are recorded in `schema_migrations`. `001_messages_sender_type.sql` adds `messages.sender_type`; `002_authorized_numbers_agent_enabled.sql` adds the per-number agent switch.
+`migrations/*.sql` files run once each, in name order, when the backend starts. Applied versions are recorded in `schema_migrations`. `001_messages_sender_type.sql` adds `messages.sender_type`; `002_authorized_numbers_agent_enabled.sql` adds the per-number agent switch; `003_authorized_numbers_is_admin.sql` adds the admin flag.

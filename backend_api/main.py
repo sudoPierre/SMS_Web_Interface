@@ -1,7 +1,6 @@
 import asyncio
 import psycopg
 import os
-import re
 import secrets
 import logging
 from contextlib import asynccontextmanager
@@ -174,6 +173,7 @@ class AuthorizedNumberUpdate(BaseModel):
     label: Optional[str] = None
     enabled: Optional[bool] = None
     agent_enabled: Optional[bool] = None
+    is_admin: Optional[bool] = None
 
 class LoginRequest(BaseModel):
     identifier: str
@@ -244,6 +244,7 @@ async def handle_incoming_sms(sender: str, text: str):
         await commands.dispatch(
             sender, text,
             reply=lambda message: write_sms_in_db(sender, message, "outbound", "command"),
+            get_db=get_db,
         )
         return
 
@@ -346,12 +347,13 @@ def authorized_number_row(r):
         "enabled": r[2],
         "created_at": r[3].isoformat() if r[3] else None,
         "agent_enabled": r[4],
+        "is_admin": r[5],
         "source": "db",
     }
 
 def valid_phone_number(number: str) -> str:
     n = commands.normalize_number(number)
-    if not re.fullmatch(r"\+?\d{6,15}", n):
+    if not commands.is_valid_number(n):
         raise HTTPException(status_code=422, detail="Invalid phone number (use E.164, e.g. +33612345678)")
     return n
 
@@ -361,7 +363,7 @@ def list_authorized_numbers(_: str = Depends(verify_token)):
     try:
         with conn.cursor() as cursor:
             cursor.execute("""
-                SELECT phone_number, label, enabled, created_at, agent_enabled
+                SELECT phone_number, label, enabled, created_at, agent_enabled, is_admin
                 FROM authorized_numbers
                 ORDER BY created_at ASC
             """)
@@ -372,7 +374,7 @@ def list_authorized_numbers(_: str = Depends(verify_token)):
     known = {n["phone_number"] for n in db_numbers}
     # Numbers from AUTHORIZED_NUMBERS are listed read-only: they can only be changed in the deployment config
     env_numbers = [
-        {"phone_number": n, "label": None, "enabled": True, "created_at": None, "agent_enabled": False, "source": "env"}
+        {"phone_number": n, "label": None, "enabled": True, "created_at": None, "agent_enabled": False, "is_admin": True, "source": "env"}
         for n in sorted(commands.env_numbers()) if n not in known
     ]
     return env_numbers + db_numbers
@@ -388,7 +390,7 @@ def add_authorized_number(payload: AuthorizedNumberCreate, _: str = Depends(veri
                 INSERT INTO authorized_numbers (phone_number, label)
                 VALUES (%s, %s)
                 ON CONFLICT (phone_number) DO NOTHING
-                RETURNING phone_number, label, enabled, created_at, agent_enabled
+                RETURNING phone_number, label, enabled, created_at, agent_enabled, is_admin
             """, (number, label))
             row = cursor.fetchone()
         conn.commit()
@@ -403,7 +405,7 @@ def update_authorized_number(phone_number: str, payload: AuthorizedNumberUpdate,
     fields = payload.model_dump(exclude_unset=True)
     if "label" in fields:
         fields["label"] = (fields["label"] or "").strip() or None
-    for flag in ("enabled", "agent_enabled"):
+    for flag in ("enabled", "agent_enabled", "is_admin"):
         if flag in fields and fields[flag] is None:
             del fields[flag]
     if not fields:
@@ -416,7 +418,7 @@ def update_authorized_number(phone_number: str, payload: AuthorizedNumberUpdate,
                 f"""
                 UPDATE authorized_numbers SET {assignments}
                 WHERE phone_number = %s
-                RETURNING phone_number, label, enabled, created_at, agent_enabled
+                RETURNING phone_number, label, enabled, created_at, agent_enabled, is_admin
                 """,
                 (*fields.values(), commands.normalize_number(phone_number)),
             )

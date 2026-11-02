@@ -79,6 +79,10 @@ export default function Whitelist({ onClose }) {
     run(n.phone_number, () => api.updateAuthorizedNumber(n.phone_number, { enabled: !n.enabled }))
   }
 
+  function handleAdminToggle(n) {
+    run(n.phone_number, () => api.updateAuthorizedNumber(n.phone_number, { is_admin: !n.is_admin }))
+  }
+
   function handleAgentToggle(n) {
     run(n.phone_number, () => api.updateAuthorizedNumber(n.phone_number, { agent_enabled: !n.agent_enabled }))
   }
@@ -164,7 +168,7 @@ export default function Whitelist({ onClose }) {
                   </p>
                   {n.source === 'env' ? (
                     <p className="text-xs text-slate-400">
-                      Set by AUTHORIZED_NUMBERS: commands only, no AI agent (edit it in the deployment config)
+                      Set by AUTHORIZED_NUMBERS: commands and /user (admin), no AI agent (edit it in the deployment config)
                     </p>
                   ) : (
                     <input
@@ -182,6 +186,19 @@ export default function Whitelist({ onClose }) {
                   <span className="text-xs font-medium text-slate-500 bg-slate-100 rounded-full px-2 py-0.5">env</span>
                 ) : (
                   <>
+                    <Toggle
+                      label="Admin"
+                      checked={n.enabled && n.is_admin}
+                      onChange={() => handleAdminToggle(n)}
+                      disabled={busy === n.phone_number || !n.enabled}
+                      title={
+                        !n.enabled
+                          ? 'Enable the number first'
+                          : n.is_admin
+                            ? 'Stop letting this number manage the whitelist by SMS'
+                            : 'Let this number add users by SMS (/user add)'
+                      }
+                    />
                     <Toggle
                       label="AI agent"
                       checked={n.enabled && n.agent_enabled}

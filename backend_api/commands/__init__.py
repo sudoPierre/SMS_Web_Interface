@@ -14,7 +14,15 @@ from .registry import (
     load_commands,
     sms_command,
 )
-from .whitelist import env_numbers, is_authorized, normalize_number
+from .whitelist import (
+    env_numbers,
+    is_admin,
+    is_authorized,
+    is_valid_number,
+    list_numbers,
+    normalize_number,
+    upsert_number,
+)
 
 __all__ = [
     "Command",
@@ -26,6 +34,10 @@ __all__ = [
     "load_commands",
     "sms_command",
     "env_numbers",
+    "is_admin",
     "is_authorized",
+    "is_valid_number",
+    "list_numbers",
     "normalize_number",
+    "upsert_number",
 ]
