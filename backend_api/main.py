@@ -1,6 +1,7 @@
 import asyncio
 import psycopg
 import os
+import re
 import secrets
 import logging
 from contextlib import asynccontextmanager
@@ -8,7 +9,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import Literal
+from typing import Literal, Optional
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 
@@ -137,6 +138,14 @@ class SMSPayload(BaseModel):
 class SMSReceived(BaseModel):
     event: str
     payload: SMSPayload
+
+class AuthorizedNumberCreate(BaseModel):
+    phone_number: str
+    label: Optional[str] = None
+
+class AuthorizedNumberUpdate(BaseModel):
+    label: Optional[str] = None
+    enabled: Optional[bool] = None
 
 class LoginRequest(BaseModel):
     identifier: str
@@ -270,3 +279,109 @@ def get_conversation_messages(phone_number: str, _: str = Depends(verify_token))
         }
         for r in rows
     ]
+
+
+# --- SMS command whitelist ---
+
+def authorized_number_row(r):
+    return {
+        "phone_number": r[0],
+        "label": r[1],
+        "enabled": r[2],
+        "created_at": r[3].isoformat() if r[3] else None,
+        "source": "db",
+    }
+
+def valid_phone_number(number: str) -> str:
+    n = commands.normalize_number(number)
+    if not re.fullmatch(r"\+?\d{6,15}", n):
+        raise HTTPException(status_code=422, detail="Invalid phone number (use E.164, e.g. +33612345678)")
+    return n
+
+@app.get("/api/authorized-numbers")
+def list_authorized_numbers(_: str = Depends(verify_token)):
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT phone_number, label, enabled, created_at
+                FROM authorized_numbers
+                ORDER BY created_at ASC
+            """)
+            rows = cursor.fetchall()
+    finally:
+        conn.close()
+    db_numbers = [authorized_number_row(r) for r in rows]
+    known = {n["phone_number"] for n in db_numbers}
+    # Numbers from AUTHORIZED_NUMBERS are listed read-only: they can only be changed in the deployment config
+    env_numbers = [
+        {"phone_number": n, "label": None, "enabled": True, "created_at": None, "source": "env"}
+        for n in sorted(commands.env_numbers()) if n not in known
+    ]
+    return env_numbers + db_numbers
+
+@app.post("/api/authorized-numbers", status_code=201)
+def add_authorized_number(payload: AuthorizedNumberCreate, _: str = Depends(verify_token)):
+    number = valid_phone_number(payload.phone_number)
+    label = (payload.label or "").strip() or None
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                INSERT INTO authorized_numbers (phone_number, label)
+                VALUES (%s, %s)
+                ON CONFLICT (phone_number) DO NOTHING
+                RETURNING phone_number, label, enabled, created_at
+            """, (number, label))
+            row = cursor.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(status_code=409, detail="This number is already in the whitelist")
+    return authorized_number_row(row)
+
+@app.patch("/api/authorized-numbers/{phone_number}")
+def update_authorized_number(phone_number: str, payload: AuthorizedNumberUpdate, _: str = Depends(verify_token)):
+    fields = payload.model_dump(exclude_unset=True)
+    if "label" in fields:
+        fields["label"] = (fields["label"] or "").strip() or None
+    if "enabled" in fields and fields["enabled"] is None:
+        del fields["enabled"]
+    if not fields:
+        raise HTTPException(status_code=422, detail="Nothing to update")
+    assignments = ", ".join(f"{column} = %s" for column in fields)
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                f"""
+                UPDATE authorized_numbers SET {assignments}
+                WHERE phone_number = %s
+                RETURNING phone_number, label, enabled, created_at
+                """,
+                (*fields.values(), commands.normalize_number(phone_number)),
+            )
+            row = cursor.fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Number not found in the whitelist")
+    return authorized_number_row(row)
+
+@app.delete("/api/authorized-numbers/{phone_number}", status_code=204)
+def delete_authorized_number(phone_number: str, _: str = Depends(verify_token)):
+    conn = get_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM authorized_numbers WHERE phone_number = %s",
+                (commands.normalize_number(phone_number),),
+            )
+            deleted = cursor.rowcount
+        conn.commit()
+    finally:
+        conn.close()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Number not found in the whitelist")

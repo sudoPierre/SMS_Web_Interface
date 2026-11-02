@@ -14,13 +14,20 @@ An incoming SMS starting with `/` from an authorized number runs a command, e.g.
                      reply SMS (messages table, outbound) ◄── worker sends it ◄───┘
 ```
 
-- **Whitelist**: a number is authorized if it is in `AUTHORIZED_NUMBERS` (comma-separated) or in the `authorized_numbers` table with `enabled = true`. Numbers are compared after stripping spaces, dots, dashes and parentheses, with a leading `00` turned into `+`. Store them in E.164 form (`+33612345678`). SMS from other numbers are stored as usual, but their commands are ignored without a reply.
+- **Whitelist**: a number is authorized if it is in `AUTHORIZED_NUMBERS` (comma-separated) or in the `authorized_numbers` table with `enabled = true`. The table is managed from the web interface (shield icon in the sidebar) or the `/api/authorized-numbers` endpoints. Numbers are normalized to E.164 before comparison: separators are removed, `00` becomes `+`, and a national number such as `06…` gets `SMS_DEFAULT_COUNTRY_CODE` (default `33`). SMS from other numbers are stored as usual, but their commands are ignored without a reply.
 - **Non-blocking**: the webhook only schedules the command (`BackgroundTasks`) and answers the gateway immediately. Handlers are async and time out after `SMS_COMMAND_TIMEOUT` seconds (default 20).
 - **Feedback**: the handler's return value, or the message of a `CommandError`, is sent back to the sender through `write_sms_in_db(..., "outbound")`, the same path as the web UI. Replies therefore show up in the conversation.
 
-```sql
-INSERT INTO authorized_numbers (phone_number, label) VALUES ('+33612345678', 'Pierre');
-```
+Whitelist API (JWT required):
+
+| Method | Path | Body |
+|---|---|---|
+| `GET` | `/api/authorized-numbers` | lists DB entries plus read-only `AUTHORIZED_NUMBERS` entries (`source: "env"`) |
+| `POST` | `/api/authorized-numbers` | `{"phone_number": "+33612345678", "label": "Pierre"}` |
+| `PATCH` | `/api/authorized-numbers/{number}` | `{"label": "…"}` and/or `{"enabled": false}` |
+| `DELETE` | `/api/authorized-numbers/{number}` | |
+
+URL-encode the number in the path (`%2B33612345678`).
 
 ### Built-in commands
 

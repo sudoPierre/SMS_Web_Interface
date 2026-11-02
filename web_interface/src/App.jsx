@@ -4,11 +4,13 @@ import Login from './components/Login.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import MessageThread from './components/MessageThread.jsx'
 import ComposeBar from './components/ComposeBar.jsx'
+import Whitelist from './components/Whitelist.jsx'
 
 export default function App() {
   const [authed, setAuthed] = useState(isAuthenticated())
   const [selectedPhone, setSelectedPhone] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [view, setView] = useState('chat')
 
   const refresh = () => setRefreshKey((k) => k + 1)
 
@@ -16,6 +18,12 @@ export default function App() {
     clearToken()
     setAuthed(false)
     setSelectedPhone(null)
+    setView('chat')
+  }
+
+  function handleSelect(phone) {
+    setSelectedPhone(phone)
+    setView('chat')
   }
 
   if (!authed) {
@@ -26,12 +34,16 @@ export default function App() {
     <div className="flex h-screen bg-slate-100 overflow-hidden">
       <Sidebar
         selectedPhone={selectedPhone}
-        onSelect={setSelectedPhone}
+        onSelect={handleSelect}
+        onOpenWhitelist={() => setView('whitelist')}
+        whitelistActive={view === 'whitelist'}
         refreshKey={refreshKey}
         onLogout={handleLogout}
       />
       <main className="flex-1 flex flex-col overflow-hidden">
-        {selectedPhone ? (
+        {view === 'whitelist' ? (
+          <Whitelist onClose={() => setView('chat')} />
+        ) : selectedPhone ? (
           <>
             <MessageThread phone={selectedPhone} refreshKey={refreshKey} />
             <ComposeBar phone={selectedPhone} onSent={refresh} />

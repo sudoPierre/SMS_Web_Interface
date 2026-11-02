@@ -25,9 +25,11 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || 'Request failed')
+    const detail = Array.isArray(err.detail) ? err.detail[0]?.msg : err.detail
+    throw new Error(detail || 'Request failed')
   }
 
+  if (res.status === 204) return null
   return res.json()
 }
 
@@ -47,5 +49,24 @@ export const api = {
     request('/api/messages/send', {
       method: 'POST',
       body: JSON.stringify({ phoneNumber, message }),
+    }),
+
+  getAuthorizedNumbers: () => request('/api/authorized-numbers'),
+
+  addAuthorizedNumber: (phone_number, label) =>
+    request('/api/authorized-numbers', {
+      method: 'POST',
+      body: JSON.stringify({ phone_number, label }),
+    }),
+
+  updateAuthorizedNumber: (phoneNumber, changes) =>
+    request(`/api/authorized-numbers/${encodeURIComponent(phoneNumber)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(changes),
+    }),
+
+  deleteAuthorizedNumber: (phoneNumber) =>
+    request(`/api/authorized-numbers/${encodeURIComponent(phoneNumber)}`, {
+      method: 'DELETE',
     }),
 }

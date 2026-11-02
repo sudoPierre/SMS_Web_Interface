@@ -31,6 +31,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
       # SMS commands: comma-separated whitelist (in addition to the authorized_numbers table)
       - AUTHORIZED_NUMBERS=${AUTHORIZED_NUMBERS:-}
+      - SMS_DEFAULT_COUNTRY_CODE=${SMS_DEFAULT_COUNTRY_CODE:-33}
       - HA_URL=${HA_URL:-}
       - HA_TOKEN=${HA_TOKEN:-}
     depends_on:

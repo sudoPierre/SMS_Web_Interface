@@ -14,7 +14,7 @@ from .registry import (
     load_commands,
     sms_command,
 )
-from .whitelist import is_authorized, normalize_number
+from .whitelist import env_numbers, is_authorized, normalize_number
 
 __all__ = [
     "Command",
@@ -25,6 +25,7 @@ __all__ = [
     "is_command",
     "load_commands",
     "sms_command",
+    "env_numbers",
     "is_authorized",
     "normalize_number",
 ]
