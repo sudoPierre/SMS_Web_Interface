@@ -1,4 +1,4 @@
-const BASE_URL = import.meta.env.VITE_BACKEND_API_URL ?? ''
+const BASE_URL = import.meta.env.VITE_BACKEND_API_URL || ''
 const TOKEN_KEY = 'sms_token'
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY)

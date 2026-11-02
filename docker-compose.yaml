@@ -1,13 +1,14 @@
 services:
   db:
-    build: ./db
-    pull_policy: build
+    image: postgres:16-alpine
+    container_name: sms_database
     restart: unless-stopped
     environment:
       POSTGRES_USER: sms_user
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       POSTGRES_DB: sms_db
     volumes:
+      - ./db:/docker-entrypoint-initdb.d
       - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sms_user -d sms_db -h localhost"]
@@ -17,7 +18,7 @@ services:
 
   backend_api:
     build: ./backend_api
-    pull_policy: build
+    container_name: sms_backend_api
     restart: unless-stopped
     environment:
       - DB_HOST=db
@@ -28,15 +29,13 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change_this_secret_in_production}
       - ADMIN_IDENTIFIER=${ADMIN_IDENTIFIER:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-changeme}
-    expose:
-      - "8000"
     depends_on:
       db:
         condition: service_healthy
 
   worker:
     build: ./worker
-    pull_policy: build
+    container_name: sms_worker
     restart: unless-stopped
     environment:
       - DB_HOST=db
@@ -53,13 +52,14 @@ services:
       db:
         condition: service_healthy
 
-  # Serves the SPA and proxies /api and /webhook to backend_api — point the Coolify domain here (port 5173)
   web_interface:
-    build: ./web_interface
-    pull_policy: build
+    build:
+      context: ./web_interface
+      dockerfile: Dockerfile
+    container_name: sms_web_interface
     restart: unless-stopped
-    expose:
-      - "5173"
+    ports:
+      - "3000:80"
     depends_on:
       - backend_api
 
